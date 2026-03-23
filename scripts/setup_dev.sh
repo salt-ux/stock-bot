@@ -4,7 +4,7 @@ set -euo pipefail
 
 PROJECT_NAME="${PROJECT_NAME:-stock-bot}"
 GO_MODULE="${GO_MODULE:-github.com/example/${PROJECT_NAME}}"
-GO_VERSION="${GO_VERSION:-1.23}"
+GO_VERSION="${GO_VERSION:-1.26.0}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -58,6 +58,22 @@ DB_PASSWORD=stockpass
 DB_NAME=stockbot
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
+BROKER_PROVIDER=kiwoom
+MARKET_PROVIDER=mock
+MARKET_CACHE_TTL_SECONDS=5
+KIWOOM_BASE_URL=
+KIWOOM_TOKEN_PATH=/oauth2/token
+KIWOOM_APP_KEY=
+KIWOOM_APP_SECRET=
+KIWOOM_MARKET_QUOTE_PATH=/api/dostk/stkinfo
+KIWOOM_MARKET_QUOTE_API_ID=ka10001
+KIWOOM_MARKET_CANDLE_PATH=/api/dostk/chart
+KIWOOM_MARKET_CANDLE_MINUTE_API_ID=ka10080
+KIWOOM_MARKET_CANDLE_DAILY_API_ID=ka10081
+TRADING_INITIAL_CASH=50000000
+RISK_MAX_POSITION_NOTIONAL=10000000
+RISK_DAILY_LOSS_LIMIT=1000000
+RISK_DUPLICATE_WINDOW_SECONDS=30
 "
 
 write_if_missing "$ROOT_DIR/docker-compose.yml" "services:
@@ -100,7 +116,7 @@ volumes:
 "
 
 write_if_missing "$ROOT_DIR/Makefile" ".RECIPEPREFIX := >
-.PHONY: help bootstrap up down logs tidy test run
+.PHONY: help bootstrap up down logs tidy test run sqlc-generate
 
 help:
 >@echo \"Targets:\"
@@ -111,6 +127,7 @@ help:
 >@echo \"  tidy       - run go mod tidy\"
 >@echo \"  test       - run go test ./...\"
 >@echo \"  run        - run api entrypoint\"
+>@echo \"  sqlc-generate - generate db code from sqlc config\"
 
 bootstrap:
 >bash scripts/setup_dev.sh
@@ -132,6 +149,9 @@ test:
 
 run:
 >go run ./cmd/api
+
+sqlc-generate:
+>sqlc generate
 "
 
 write_if_missing "$ROOT_DIR/cmd/api/main.go" "package main

@@ -1,5 +1,5 @@
 .RECIPEPREFIX := >
-.PHONY: help bootstrap up down logs tidy test run
+.PHONY: help bootstrap up down logs tidy test run sqlc-generate
 
 help:
 >@echo "Targets:"
@@ -10,6 +10,7 @@ help:
 >@echo "  tidy       - run go mod tidy"
 >@echo "  test       - run go test ./..."
 >@echo "  run        - run api entrypoint"
+>@echo "  sqlc-generate - generate db code from sqlc config"
 
 bootstrap:
 >bash scripts/setup_dev.sh
@@ -31,3 +32,6 @@ test:
 
 run:
 >go run ./cmd/api
+
+sqlc-generate:
+>sqlc generate
