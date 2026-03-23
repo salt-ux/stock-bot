@@ -1,0 +1,68 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  login_id VARCHAR(100) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS portfolios (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  cash_balance DECIMAL(18,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_portfolios_user FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE KEY uq_portfolios_user_name (user_id, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS positions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  portfolio_id BIGINT NOT NULL,
+  symbol VARCHAR(20) NOT NULL,
+  quantity BIGINT NOT NULL DEFAULT 0,
+  avg_price DECIMAL(18,2) NOT NULL DEFAULT 0,
+  last_price DECIMAL(18,2) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_positions_portfolio FOREIGN KEY (portfolio_id) REFERENCES portfolios(id),
+  UNIQUE KEY uq_positions_portfolio_symbol (portfolio_id, symbol)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS orders (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  portfolio_id BIGINT NOT NULL,
+  symbol VARCHAR(20) NOT NULL,
+  side ENUM('BUY','SELL') NOT NULL,
+  order_type ENUM('MARKET','LIMIT') NOT NULL,
+  status ENUM('PENDING','FILLED','CANCELED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  quantity BIGINT NOT NULL,
+  price DECIMAL(18,2) NOT NULL,
+  external_order_id VARCHAR(100) NULL,
+  submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  filled_at TIMESTAMP NULL,
+  CONSTRAINT fk_orders_portfolio FOREIGN KEY (portfolio_id) REFERENCES portfolios(id),
+  KEY idx_orders_portfolio_submitted (portfolio_id, submitted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fills (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  order_id BIGINT NOT NULL,
+  fill_price DECIMAL(18,2) NOT NULL,
+  fill_quantity BIGINT NOT NULL,
+  fee DECIMAL(18,2) NOT NULL DEFAULT 0,
+  filled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_fills_order FOREIGN KEY (order_id) REFERENCES orders(id),
+  KEY idx_fills_order_filled (order_id, filled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS strategy_runs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  portfolio_id BIGINT NOT NULL,
+  strategy_name VARCHAR(100) NOT NULL,
+  status ENUM('RUNNING','SUCCESS','FAILED') NOT NULL DEFAULT 'RUNNING',
+  started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at TIMESTAMP NULL,
+  error_message TEXT NULL,
+  CONSTRAINT fk_strategy_runs_portfolio FOREIGN KEY (portfolio_id) REFERENCES portfolios(id),
+  KEY idx_strategy_runs_portfolio_started (portfolio_id, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

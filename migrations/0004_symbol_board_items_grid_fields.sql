@@ -1,0 +1,5 @@
+ALTER TABLE symbol_board_items
+  ADD COLUMN IF NOT EXISTS progress_state VARCHAR(12) NOT NULL DEFAULT 'WAIT' AFTER is_selected,
+  ADD COLUMN IF NOT EXISTS sell_ratio_pct INT NOT NULL DEFAULT 10 AFTER progress_state,
+  ADD COLUMN IF NOT EXISTS trade_method VARCHAR(32) NOT NULL DEFAULT 'V2.2' AFTER sell_ratio_pct,
+  ADD COLUMN IF NOT EXISTS note_text VARCHAR(255) NOT NULL DEFAULT '' AFTER trade_method;
