@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Bot Mock HTS</title>
+  <link rel="stylesheet" href="/static/trade.css?v=20260302-12" />
+</head>
+<body>
+  <main class="legacy-shell">
+    <header class="legacy-titlebar">
+      <div class="title-text">해외주식 스마트 RPA - 모의계좌 자동매매 v1.0</div>
+      <a class="logout-link" href="/auth/logout">로그아웃</a>
+    </header>
+
+    <nav class="legacy-menubar">
+      <button type="button">한번에 Go!</button>
+      <button type="button">다계좌 모두 한번에 Go!</button>
+      <button type="button">설정</button>
+      <button type="button">도움말</button>
+    </nav>
+
+    <section class="legacy-ribbon">
+      <div class="ribbon-row">
+        <div class="summary-cells">
+          <article class="summary-cell">
+            <span>총입금금액</span>
+            <strong id="account-total">-</strong>
+          </article>
+          <article class="summary-cell">
+            <span>총설정금액</span>
+            <strong id="account-holdings">-</strong>
+          </article>
+          <article class="summary-cell">
+            <span>총종목별원금</span>
+            <strong id="account-cash">-</strong>
+          </article>
+          <article class="summary-cell">
+            <span>당일 실현손익</span>
+            <strong id="account-realized-pnl">-</strong>
+          </article>
+          <article class="summary-cell">
+            <span>보유 종목 수</span>
+            <strong id="account-position-count">-</strong>
+          </article>
+          <article class="summary-cell">
+            <span>최근 주문 수</span>
+            <strong id="account-order-count">-</strong>
+          </article>
+        </div>
+        <div class="runtime-state">
+          <span id="sse-status" class="badge">연결 중...</span>
+          <span id="last-event" class="runtime-message">최근 이벤트 없음</span>
+          <span id="account-updated-at" class="runtime-time">최근 갱신: -</span>
+        </div>
+      </div>
+
+      <div class="ribbon-row action-row">
+        <form id="quote-form" class="inline-form">
+          <label for="quote-symbol-code">종목 코드</label>
+          <input id="quote-symbol-code" name="symbol_code" type="text" placeholder="005930" value="005930" inputmode="numeric" autocomplete="off" />
+          <label for="quote-symbol-name">종목명</label>
+          <input id="quote-symbol-name" name="symbol_name" type="text" placeholder="삼성전자" list="quote-symbol-name-options" autocomplete="off" />
+          <datalist id="quote-symbol-name-options"></datalist>
+          <button type="submit">종목 검색</button>
+        </form>
+
+        <div class="range-buttons" id="range-buttons">
+          <button type="button" data-range="1d" class="active">1일</button>
+          <button type="button" data-range="1w">1주일</button>
+          <button type="button" data-range="1m">1달</button>
+          <button type="button" data-range="3m">3달</button>
+          <button type="button" data-range="1y">1년</button>
+        </div>
+
+        <form id="paper-order-form" class="inline-form order-inline">
+          <label for="symbol">주문 종목</label>
+          <input id="symbol" name="symbol" type="text" placeholder="005930" value="005930" />
+          <label for="side">주문 구분</label>
+          <select id="side" name="side">
+            <option value="BUY">매수</option>
+            <option value="SELL">매도</option>
+          </select>
+          <label for="qty">수량</label>
+          <input id="qty" name="qty" type="number" min="1" value="1" />
+          <button type="submit">모의계좌 주문 실행</button>
+        </form>
+      </div>
+      <p id="quote-message" class="line-status"></p>
+      <p id="quote-result" class="line-status">조회 결과 없음</p>
+      <p id="order-message" class="line-status"></p>
+    </section>
+
+    <section class="workspace">
+      <section class="panel board-panel">
+        <div class="panel-head">
+          <h2>다계좌 / 완전자동화 모니터</h2>
+          <span class="head-note">종목별 매수/매도 단계 진행표</span>
+        </div>
+        <div class="symbol-toolbar">
+          <form id="symbol-manage-form" class="symbol-manage-form">
+            <label for="symbol-manage-code-input">종목 코드</label>
+            <input id="symbol-manage-code-input" type="text" placeholder="AMZN 또는 005930" autocomplete="off" />
+            <label for="symbol-manage-name-input">종목명</label>
+            <div class="symbol-name-search">
+              <input id="symbol-manage-name-input" type="text" placeholder="종목명 입력 후 Enter/선택" autocomplete="off" />
+              <button id="symbol-manage-name-search-button" type="button" aria-label="종목명 검색">검색</button>
+              <div id="symbol-manage-name-suggestions" class="symbol-name-suggestions" hidden></div>
+            </div>
+            <button type="submit">추가</button>
+            <button type="button" id="symbol-run-selected-rule-button">진행 종목 규칙 실행</button>
+            <button type="button" id="symbol-remove-selected-button">선택 삭제</button>
+            <button type="button" id="symbol-reset-button">기본 복원</button>
+          </form>
+          <p id="symbol-manage-message" class="line-status"></p>
+          <div class="sim-toolbar">
+            <button type="button" id="v22-sim-start-button">V2.2 50일 시뮬 시작</button>
+            <button type="button" id="v22-sim-stop-button">시뮬 중지</button>
+            <span id="v22-sim-message" class="line-status">시뮬 대기중</span>
+          </div>
+        </div>
+        <div class="table-scroller">
+          <table class="board-table">
+            <thead>
+              <tr>
+                <th>선택</th>
+                <th>No.</th>
+                <th>종목</th>
+                <th>종목명</th>
+                <th>종목별 원금(원)</th>
+                <th>진행</th>
+                <th>매입금액</th>
+                <th>평가손익</th>
+                <th>현재가</th>
+                <th>수익률</th>
+                <th>회차</th>
+                <th>보유량</th>
+                <th>최근 체결</th>
+                <th>매매법</th>
+                <th>입금분할</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody id="strategy-grid-body"></tbody>
+          </table>
+        </div>
+        <div class="sim-log-wrap">
+          <table class="sim-log-table">
+            <thead>
+              <tr>
+                <th>일차</th>
+                <th>가짜 현재가</th>
+                <th>등락폭(%)</th>
+                <th>주문</th>
+                <th>결과</th>
+              </tr>
+            </thead>
+            <tbody id="v22-sim-log-body">
+              <tr><td colspan="5" class="cell-note">시뮬레이션 로그가 없습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="/static/trade_live.js?v=20260302-25"></script>
+</body>
+</html>
