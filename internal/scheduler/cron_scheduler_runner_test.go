@@ -56,7 +56,7 @@ func TestRunAutoTradeOncePlacesBuyOrder(t *testing.T) {
 		AutoTradeQty:      2,
 		SMAShortWindow:    5,
 		SMALongWindow:     20,
-	}, engine, trader)
+	}, engine, trader, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestRunAutoTradeOnceHoldSkipsOrder(t *testing.T) {
 		AutoTradeQty:      1,
 		SMAShortWindow:    5,
 		SMALongWindow:     20,
-	}, engine, trader)
+	}, engine, trader, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

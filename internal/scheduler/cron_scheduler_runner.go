@@ -10,6 +10,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/salt-ux/stock-bot/internal/board"
 	"github.com/salt-ux/stock-bot/internal/config"
 	"github.com/salt-ux/stock-bot/internal/strategy"
 	"github.com/salt-ux/stock-bot/internal/strategy/infinitebuy"
@@ -23,6 +24,11 @@ type strategyEngineRunner interface {
 
 type paperOrderExecutor interface {
 	PlaceOrder(ctx context.Context, req trading.OrderRequest) (trading.Order, error)
+}
+
+// buyRuleRunner는 보드 종목 목록을 받아 무한매수법 규칙을 일괄 실행합니다.
+type buyRuleRunner interface {
+	Execute(ctx context.Context, req trading.BuyRuleExecuteRequest) (trading.BuyRuleExecuteResult, error)
 }
 
 type AutoTradeJobResult struct {
@@ -47,11 +53,13 @@ type CronSchedulerSnapshot struct {
 }
 
 type CronSchedulerRunner struct {
-	cfg      config.SchedulerConfig
-	engine   strategyEngineRunner
-	trader   paperOrderExecutor
-	location *time.Location
-	cron     *cron.Cron
+	cfg        config.SchedulerConfig
+	engine     strategyEngineRunner
+	trader     paperOrderExecutor
+	buyRule    buyRuleRunner
+	symbolBoard board.SymbolStore
+	location   *time.Location
+	cron       *cron.Cron
 
 	mu             sync.Mutex
 	running        bool
@@ -60,18 +68,20 @@ type CronSchedulerRunner struct {
 	onAutoTrade    func(AutoTradeJobResult)
 }
 
-func NewCronSchedulerRunner(cfg config.SchedulerConfig, engine strategyEngineRunner, trader paperOrderExecutor) (*CronSchedulerRunner, error) {
+func NewCronSchedulerRunner(cfg config.SchedulerConfig, engine strategyEngineRunner, trader paperOrderExecutor, symbolBoard board.SymbolStore, buyRule buyRuleRunner) (*CronSchedulerRunner, error) {
 	loc, err := time.LoadLocation(cfg.Timezone)
 	if err != nil {
 		return nil, fmt.Errorf("load scheduler timezone: %w", err)
 	}
 
 	runner := &CronSchedulerRunner{
-		cfg:      cfg,
-		engine:   engine,
-		trader:   trader,
-		location: loc,
-		cron:     cron.New(cron.WithLocation(loc)),
+		cfg:         cfg,
+		engine:      engine,
+		trader:      trader,
+		buyRule:     buyRule,
+		symbolBoard: symbolBoard,
+		location:    loc,
+		cron:        cron.New(cron.WithLocation(loc)),
 	}
 	if !cfg.Enabled {
 		return runner, nil
@@ -162,6 +172,69 @@ func (r *CronSchedulerRunner) runAutoTradeJob() {
 }
 
 func (r *CronSchedulerRunner) runAutoTradeOnce(ctx context.Context) {
+	// 보드에 선택된 종목이 있으면 무한매수법 규칙 기반 일괄 매매를 실행합니다.
+	if r.symbolBoard != nil && r.buyRule != nil {
+		r.runBoardAutoTrade(ctx)
+		return
+	}
+	// 보드가 없으면 설정 기반 단일 종목 전략으로 폴백합니다.
+	r.runSingleSymbolAutoTrade(ctx)
+}
+
+// runBoardAutoTrade는 보드에 등록된 선택 종목을 모두 읽어 무한매수법 규칙을 실행합니다.
+func (r *CronSchedulerRunner) runBoardAutoTrade(ctx context.Context) {
+	symbols, err := r.symbolBoard.List(ctx)
+	if err != nil {
+		r.recordAutoTrade(AutoTradeJobResult{
+			At:     time.Now().UTC(),
+			Strategy: "board_buy_rule",
+			Signal:   string(strategy.SignalHold),
+			Reason:   "보드 종목 조회 실패",
+			Error:    err.Error(),
+		})
+		log.Printf("[scheduler] board auto-trade skipped: %v", err)
+		return
+	}
+
+	// IsSelected 된 종목만 추립니다.
+	items := make([]trading.BuyRuleExecuteItem, 0, len(symbols))
+	for _, s := range symbols {
+		if !s.IsSelected {
+			continue
+		}
+		items = append(items, trading.BuyRuleExecuteItem{
+			Symbol:       s.Symbol,
+			DisplayName:  s.DisplayName,
+			PrincipalKRW: s.PrincipalKRW,
+			SplitCount:   s.SplitCount,
+		})
+	}
+
+	if len(items) == 0 {
+		log.Printf("[scheduler] board auto-trade skipped: 선택된 종목 없음")
+		return
+	}
+
+	result, err := r.buyRule.Execute(ctx, trading.BuyRuleExecuteRequest{Items: items})
+	jobResult := AutoTradeJobResult{
+		At:       time.Now().UTC(),
+		Strategy: "board_buy_rule",
+		Signal:   string(strategy.SignalHold),
+	}
+	if err != nil {
+		jobResult.Error = err.Error()
+		jobResult.Reason = "매수 규칙 실행 실패"
+	} else {
+		jobResult.OrderPlaced = result.TotalOrders > 0
+		jobResult.Reason = fmt.Sprintf("종목 %d개 처리, 주문 %d건 (매수 %d, 매도 %d)",
+			result.TotalSymbols, result.TotalOrders, result.TotalBuyOrders, result.TotalSellOrders)
+	}
+	r.recordAutoTrade(jobResult)
+	log.Printf("[scheduler] board auto-trade: %s err=%s", jobResult.Reason, jobResult.Error)
+}
+
+// runSingleSymbolAutoTrade는 설정 기반 단일 종목 전략 신호 실행입니다 (보드 미사용 시 폴백).
+func (r *CronSchedulerRunner) runSingleSymbolAutoTrade(ctx context.Context) {
 	strategyImpl, defaultLimit, err := r.buildAutoTradeStrategy()
 	if err != nil {
 		r.recordAutoTrade(AutoTradeJobResult{

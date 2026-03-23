@@ -82,7 +82,7 @@ func main() {
 		eventsHub.Publish("v22_sim_state", state)
 		eventsHub.Publish("paper_state", paperSvc.GetState())
 	})
-	schedulerRunner, err := scheduler.NewCronSchedulerRunner(cfg.Scheduler, strategyEngine, paperSvc)
+	schedulerRunner, err := scheduler.NewCronSchedulerRunner(cfg.Scheduler, strategyEngine, paperSvc, symbolBoardStore, buyRuleExecutor)
 	if err != nil {
 		log.Fatalf("failed to initialize scheduler: %v", err)
 	}

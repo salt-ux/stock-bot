@@ -6,6 +6,8 @@ import (
 	"github.com/salt-ux/stock-bot/internal/board"
 )
 
+const maxBoardSymbols = 20
+
 type boardSymbolsReplaceRequest struct {
 	Items []board.SymbolRecord `json:"items"`
 }
@@ -33,6 +35,10 @@ func boardSymbolsHandler(store board.SymbolStore) http.HandlerFunc {
 			}
 			if req.Items == nil {
 				req.Items = []board.SymbolRecord{}
+			}
+			if len(req.Items) > maxBoardSymbols {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"message": "종목은 최대 20개까지 등록할 수 있습니다"})
+				return
 			}
 			if err := store.ReplaceAll(r.Context(), req.Items); err != nil {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"message": "종목 목록 저장에 실패했습니다: " + err.Error()})
